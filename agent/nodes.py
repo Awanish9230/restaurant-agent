@@ -40,13 +40,42 @@ def _recalculate_cart_totals(cart: List[OrderCartItem]) -> tuple[float, float, f
 
 
 def supervisor_router_node(state: RestaurantState) -> Dict[str, Any]:
-    """Classifies user intent and routes to specialized subgraphs/nodes."""
-    user_msg = state["user_message"]
+    """Classifies user intent and routes to specialized subgraphs/nodes with conversational history context."""
+    user_msg = state["user_message"].strip()
+    user_msg_lower = user_msg.lower()
     trace = _log_trace(state, "Supervisor Router", "Intent Classification", f"Analyzing customer message: '{user_msg}'")
 
-    prompt = f"""You are the Master Concierge for 'ZaikaAI'.
-Analyze the customer's message and determine the primary intent.
+    # Inspect last assistant message for multi-turn disambiguation
+    recent_msgs = state.get("messages", [])
+    last_assistant_msg = ""
+    for m in reversed(recent_msgs):
+        if m.get("role") == "assistant":
+            last_assistant_msg = m.get("content", "")
+            break
 
+    # Fast intent classification for confirmations / short replies
+    confirmation_words = ["yes", "yeah", "yep", "sure", "ok", "okay", "add it", "please add", "add this", "1", "2", "3", "4", "first one", "second one"]
+    if user_msg_lower in confirmation_words or any(user_msg_lower.startswith(w) for w in ["yes ", "sure ", "please "]):
+        if last_assistant_msg:
+            return {
+                "agent_trace": trace,
+                "customer_name": state.get("customer_name"),
+                "order_status": "order_action"
+            }
+
+    # Fast check if user mentioned a dish name directly (e.g. 'wild pizza', 'smoky paneer', 'tiramisu')
+    direct_match = rag_engine.fuzzy_match_dish(user_msg, threshold=70)
+    if direct_match and not any(kw in user_msg_lower for kw in ["what is", "how much", "tell me about", "ingredients", "calories", "is it"]):
+        return {
+            "agent_trace": trace,
+            "customer_name": state.get("customer_name"),
+            "order_status": "order_action"
+        }
+
+    prompt = f"""You are the Master Concierge for 'ZaikaAI'.
+Analyze the customer's message and the conversation history to determine the primary intent.
+
+Recent Assistant Message: "{last_assistant_msg}"
 Customer message: "{user_msg}"
 
 Active Cart currently has: {len(state.get('cart', []))} items.
@@ -58,10 +87,12 @@ Return JSON ONLY in this format:
 }}
 
 Guidelines:
-- "order_action": If customer mentions ordering, adding, removing, changing food/drinks or their name.
-- "menu_inquiry": If customer asks what's on the menu, vegan/spicy dishes, recommendations, ingredients, prices.
+- "order_action":
+  * If customer mentions ordering, adding, removing, changing food/drinks or dishes.
+  * If the assistant previously suggested dishes or asked "Which one would you like?" / "May I add one?" and customer answers with a dish (e.g. "wild pizza", "paneer burger") or confirms ("yes", "sure", "add it").
 - "confirm_order": If customer explicitly says 'confirm', 'checkout', 'place order', 'ready to pay', 'bill please'.
-- "general_chat": Greetings like 'hello', 'thank you', 'how are you'.
+- "menu_inquiry": If customer asks what is on the menu, vegan/spicy options, dish ingredients, prices.
+- "general_chat": Greetings like 'hello', 'thank you', 'how are you' without ordering intent.
 """
     try:
         res = llm.invoke([HumanMessage(content=prompt)]).content
@@ -94,12 +125,17 @@ def _clean_text(text: str) -> str:
 def rag_menu_node(state: RestaurantState) -> Dict[str, Any]:
     """Semantic RAG node searching Qdrant vector database for menu answers."""
     user_msg = state["user_message"]
+    user_msg_lower = user_msg.lower()
     trace = _log_trace(state, "Qdrant RAG Engine", "Vector Similarity Search", f"Searching vector index for: '{user_msg}'")
 
-    # Search in Qdrant / Hybrid RAG
-    hits = rag_engine.search(user_msg, limit=15)
-    if not hits:
+    # For full menu queries, provide ALL dishes so no categories (especially desserts) are ever omitted
+    is_full_menu_query = any(phrase in user_msg_lower for phrase in ["menu", "what is on", "what do you serve", "all dishes", "options", "full menu", "what do you have", "show me"])
+    if is_full_menu_query:
         hits = rag_engine.get_all_menu()
+    else:
+        hits = rag_engine.search(user_msg, limit=15)
+        if not hits:
+            hits = rag_engine.get_all_menu()
 
     menu_context = "\n\n".join([
         f"Dish: {h['name']}\nCategory: {h['category']}\nPrice: Rs.{h['price']}\nDietary: {', '.join(h['dietary'])}\nSpicy: {h['spicy_level']}/3\nCalories: {h['calories']} kcal\nDescription: {h['description']}\nIngredients: {', '.join(h['ingredients'])}"
@@ -115,9 +151,9 @@ Verified Menu Context:
 {menu_context}
 
 CRITICAL Guidelines:
-1. When asked how many items or what varieties of an item exist (e.g. burgers, pizzas, pastas, drinks, desserts, or the full menu), you MUST list ALL matching items present in the Verified Menu Context. Do NOT omit any dishes.
+1. When asked what is on the menu or what dishes are available, you MUST list ALL matching items present in the Verified Menu Context. Group dishes under Pizzas, Burgers, Pastas, Drinks, and Desserts.
 2. For specific questions like 'how many types of burger do you have', state the exact count and describe each burger variety with its name, price, key ingredients, and dietary notes.
-3. For full menu queries ('show me what is on the menu', 'what do you serve'), group and list all items categorized by Pizzas, Burgers, Pastas, Drinks, and Desserts with their prices.
+3. If Desserts are in the menu context (e.g. Belgian Dark Chocolate Gelato, Venetian Tiramisu Classico, Warm Belgian Molten Lava Cake), you MUST list them under Desserts!
 4. Speak warmly, courteously, and appetizingly.
 5. NEVER use asterisks (**) or markdown bold marks in your text. Keep the output clean, natural, and humanized.
 6. End with a polite recommendation or invitation to add something to their order.
@@ -127,9 +163,9 @@ CRITICAL Guidelines:
     response = _clean_text(raw_response)
 
     prompts = [
-        "Add 1 Margherita Pizza to my order",
+        "Add 1 Smoky BBQ Paneer Pizza to my order",
         "What drinks pair well with burgers?",
-        "Show me all vegetarian desserts",
+        "Show me all desserts",
         "Confirm my order"
     ]
 
@@ -180,9 +216,27 @@ def order_processing_node(state: RestaurantState) -> Dict[str, Any]:
             ]
         }
 
-    prompt = f"""You are an order extraction engine for a restaurant.
-Extract all order actions from the customer message.
+    # Retrieve conversation context
+    recent_msgs = state.get("messages", [])
+    last_assistant_msg = ""
+    last_user_msg = ""
+    for m in reversed(recent_msgs):
+        if m.get("role") == "assistant" and not last_assistant_msg:
+            last_assistant_msg = m.get("content", "")
+        elif m.get("role") == "user" and not last_user_msg and m.get("content") != user_msg:
+            last_user_msg = m.get("content", "")
 
+    # Look for quantity context in previous user query (e.g. "order 2 pizza")
+    context_qty = 1
+    if last_user_msg:
+        qty_search = re.search(r"\b(\d+)\b", last_user_msg)
+        if qty_search:
+            context_qty = int(qty_search.group(1))
+
+    prompt = f"""You are an order extraction engine for ZaikaAI restaurant.
+Extract all order actions from the customer message considering the recent conversation.
+
+Recent Assistant Message: "{last_assistant_msg}"
 Customer Message: "{user_msg}"
 Available Menu Names: {json.dumps(all_dishes)}
 
@@ -192,12 +246,16 @@ Return ONLY JSON in this format:
     "actions": [
         {{
             "action": "add" | "remove" | "update",
-            "item_name": "raw dish name mentioned",
+            "item_name": "exact or closest menu dish name",
             "quantity": 1,
-            "notes": "special instructions like no onions or null"
+            "notes": "special instructions or null"
         }}
     ]
 }}
+
+Guidelines:
+- If customer says "yes", "sure", "add it", "please", look at the assistant's previous message to find which dish was being discussed and add it.
+- If customer gives a short dish name like "wild pizza", "smoky pizza", "paneer burger", match it to the available menu dish.
 """
     try:
         res = llm.invoke([HumanMessage(content=prompt)]).content
@@ -208,6 +266,22 @@ Return ONLY JSON in this format:
             state["customer_name"] = data["customer_name"]
     except Exception:
         actions = []
+
+    # Direct fallback for simple affirmations ("yes", "sure", "add it")
+    confirmation_words = ["yes", "yeah", "yep", "sure", "ok", "okay", "add it", "please add", "add this"]
+    if not actions and (user_msg_lower in confirmation_words or any(user_msg_lower.startswith(w) for w in ["yes ", "sure ", "please "])) and last_assistant_msg:
+        for item in all_menu_items:
+            if item["name"].lower() in last_assistant_msg.lower() or item["slug"] in last_assistant_msg.lower():
+                actions = [{"action": "add", "item_name": item["name"], "quantity": 1, "notes": ""}]
+                break
+
+    # Direct fallback for short dish names (e.g. "wild pizza", "smoky bbq", "tiramisu")
+    if not actions:
+        matched_dish = rag_engine.fuzzy_match_dish(user_msg, threshold=68)
+        if matched_dish:
+            num_match = re.search(r"\b(\d+)\b", user_msg)
+            qty = int(num_match.group(1)) if num_match else context_qty
+            actions = [{"action": "add", "item_name": matched_dish["name"], "quantity": qty, "notes": ""}]
 
     added_items = []
     removed_items = []

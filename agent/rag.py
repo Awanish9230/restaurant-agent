@@ -184,21 +184,27 @@ class MenuRAG:
         return None
 
     def get_category_matches(self, query: str) -> List[Dict[str, Any]]:
-        """Finds all dish items belonging to a pure generic category noun (e.g. 'pizza', 'burger', 'pasta', 'drink', 'dessert')."""
+        """Finds all dish items belonging to a pure generic category noun (e.g. 'pizza', 'piiza', 'burger', 'pasta', 'drink', 'dessert')."""
         q = query.lower().strip()
         all_items = self.get_all_menu()
 
-        # Pure generic keywords only
+        # Generic category keywords and common typos
         generic_categories = {
-            "pizza": ["pizza", "pizzas", "pzza"],
-            "burger": ["burger", "burgers"],
-            "pasta": ["pasta", "pastas"],
-            "drink": ["drink", "drinks", "beverage", "beverages", "coffee", "cold drink", "cold drinks"],
-            "dessert": ["dessert", "desserts", "ice cream", "icecream"]
+            "pizza": ["pizza", "pizzas", "piiza", "pizaa", "pzza", "pizzza"],
+            "burger": ["burger", "burgers", "burgur", "burgr"],
+            "pasta": ["pasta", "pastas", "passta", "pazta"],
+            "drink": ["drink", "drinks", "beverage", "beverages", "coffee", "cold drink", "cold drinks", "cha", "tea", "chai"],
+            "dessert": ["dessert", "desserts", "sweet", "sweets", "ice cream", "icecream", "cake", "cakes"]
         }
 
         for cat_name, keywords in generic_categories.items():
+            is_match = False
             if q in keywords or any(kw == q for kw in keywords):
+                is_match = True
+            elif any(fuzz.ratio(q, kw) >= 78 for kw in keywords):
+                is_match = True
+
+            if is_match:
                 matches = []
                 for item in all_items:
                     searchable = (item["name"] + " " + item["slug"] + " " + item.get("category", "") + " " + " ".join(item.get("aliases", []))).lower()
@@ -240,13 +246,22 @@ class MenuRAG:
             if filtered:
                 return filtered[:limit]
 
-        # 2. Category / Keyword specific inquiry (e.g. "burger", "pizza", "pasta", "drink", "dessert")
-        keywords = ["burger", "pizza", "pasta", "drink", "coffee", "dessert", "ice cream", "gelato", "lemonade"]
+        # 2. Match exact dish names, aliases, or category keywords (e.g. "lava cake", "tiramisu", "gelato", "burger", "pizza")
         matched_items = []
+
+        # Direct dish name and alias match
+        for item in all_items:
+            for token in [item["name"].lower(), item["slug"].lower()] + [a.lower() for a in item.get("aliases", [])]:
+                if token in q_clean or q_clean in token or fuzz.ratio(q_clean, token) >= 75:
+                    if item not in matched_items:
+                        matched_items.append(item)
+
+        # Keyword / Category match
+        keywords = ["burger", "pizza", "pasta", "drink", "coffee", "dessert", "desserts", "sweet", "sweets", "ice cream", "gelato", "lemonade", "cake", "tiramisu", "lava cake", "chocolate"]
         for kw in keywords:
             if kw in q_clean:
                 for item in all_items:
-                    name_slug = (item["name"] + " " + item["slug"] + " " + " ".join(item.get("aliases", []))).lower()
+                    name_slug = (item["name"] + " " + item["slug"] + " " + item.get("category", "") + " " + " ".join(item.get("aliases", []))).lower()
                     if kw in name_slug and item not in matched_items:
                         matched_items.append(item)
 
