@@ -1,0 +1,41 @@
+# Secrets and environment
+.env
+.env*
+*.env
+*.env.local
+.env.local
+.env.*.local
+
+# Python cache and compiled files
+**/__pycache__/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+*.sqlite
+*.sqlite3
+*.db
+
+# Node.js and Next.js builds
+**/node_modules/
+node_modules/
+**/.next/
+.next/
+out/
+build/
+dist/
+
+# Logs and system
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.system_generated/
+scratch/
+tmp/
