@@ -9,7 +9,7 @@ import { LiveCart } from "../components/LiveCart";
 import { AgentTraceModal } from "../components/AgentTraceModal";
 import { HITLModal } from "../components/HITLModal";
 import { KitchenTimeline } from "../components/KitchenTimeline";
-import { Bot, ShoppingBag } from "lucide-react";
+import { Bot, ShoppingBag, Loader2, Zap } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -18,6 +18,7 @@ export default function Home() {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [categories, setCategories] = useState<string[]>(["all"]);
   const [backendHealthy, setBackendHealthy] = useState<boolean>(false);
+  const [isWakingUp, setIsWakingUp] = useState<boolean>(false);
   const [isThinking, setIsThinking] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isTraceOpen, setIsTraceOpen] = useState<boolean>(false);
@@ -59,33 +60,54 @@ export default function Home() {
 
   // Generate unique session ID on client mount
   useEffect(() => {
-    const saved = localStorage.getItem("gourmet_session_id");
+    const saved = localStorage.getItem("zaika_session_id") || localStorage.getItem("gourmet_session_id");
     const newId = saved || `session-${Math.random().toString(36).substring(2, 9)}`;
-    if (!saved) localStorage.setItem("gourmet_session_id", newId);
+    if (!saved) localStorage.setItem("zaika_session_id", newId);
     setSessionId(newId);
     setState((prev) => ({ ...prev, session_id: newId }));
   }, []);
 
-  // Fetch initial menu & check backend health
+  // Fetch initial menu & check backend health with auto-retry for Render cold starts
   useEffect(() => {
-    const fetchInitialData = async () => {
-      try {
-        const healthRes = await fetch(`${API_BASE}/api/health`);
-        if (healthRes.ok) setBackendHealthy(true);
+    let intervalId: NodeJS.Timeout | null = null;
+    let attempts = 0;
 
-        const menuRes = await fetch(`${API_BASE}/api/menu`);
-        if (menuRes.ok) {
-          const menuData = await menuRes.json();
-          setMenuItems(menuData.items);
-          setCategories(menuData.categories);
+    const checkHealthAndMenu = async () => {
+      attempts++;
+      try {
+        const healthRes = await fetch(`${API_BASE}/api/health`, { cache: "no-store" });
+        if (healthRes.ok) {
+          setBackendHealthy(true);
+          setIsWakingUp(false);
+          if (intervalId) clearInterval(intervalId);
+
+          // Fetch full menu once health confirmed
+          const menuRes = await fetch(`${API_BASE}/api/menu`);
+          if (menuRes.ok) {
+            const menuData = await menuRes.json();
+            setMenuItems(menuData.items);
+            setCategories(menuData.categories);
+          }
+          return;
         }
       } catch (err) {
-        console.warn("Backend connecting...", err);
+        // Backend is either offline or waking up from Render free tier sleep
         setBackendHealthy(false);
+        if (attempts > 0) {
+          setIsWakingUp(true);
+        }
       }
     };
 
-    fetchInitialData();
+    // Immediate first check
+    checkHealthAndMenu();
+
+    // Auto-poll every 3.5 seconds until backend wakes up
+    intervalId = setInterval(checkHealthAndMenu, 3500);
+
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, []);
 
   // Send message to LangGraph Chat API
@@ -253,7 +275,30 @@ export default function Home() {
       />
 
       {/* Main Content Body */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6">
+        {/* Render Free-Tier Cold Start Alert */}
+        {!backendHealthy && (
+          <div className="rounded-2xl bg-amber-50 border border-amber-200/80 p-4 shadow-sm flex items-center justify-between animate-fadeIn transition-all">
+            <div className="flex items-center space-x-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm animate-pulse">
+                <Zap className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs sm:text-sm font-bold text-amber-900 flex items-center">
+                  <span>Waking up Cloud AI Server</span>
+                  <Loader2 className="w-3.5 h-3.5 ml-2 animate-spin text-amber-700" />
+                </h4>
+                <p className="text-[11px] sm:text-xs text-amber-700 font-medium">
+                  Render's free tier server spins down when idle. It takes ~30–45 seconds on first visit. Automatically connecting...
+                </p>
+              </div>
+            </div>
+            <span className="hidden md:inline-block px-2.5 py-1 bg-white/90 rounded-lg text-[10px] font-bold text-amber-800 border border-amber-200 shrink-0">
+              Auto-Polling
+            </span>
+          </div>
+        )}
+
         {/* 2-Column Responsive Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           {/* Left Column (Menu & Kitchen Pipeline) - 7 cols */}
