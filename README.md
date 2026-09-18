@@ -4,124 +4,114 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111+-009688.svg)](https://fastapi.tiangolo.com)
 [![Next.js 14](https://img.shields.io/badge/Next.js-14.2-black.svg)](https://nextjs.org)
 [![Qdrant Vector DB](https://img.shields.io/badge/Qdrant-Cloud_%26_Embedded-red.svg)](https://qdrant.tech)
-[![Zero-Cost Free Tier](https://img.shields.io/badge/Free_Tier-Render_%2B_Vercel-brightgreen.svg)]()
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A production-grade, resume-defining Agentic AI full-stack application for **ZaikaAI** built with **LangGraph Stateful Multi-Turn Agents**, **Qdrant Hybrid Vector RAG**, **Human-in-the-Loop (HITL) Safeguards**, **FastAPI Async Backend**, and an ultra-polished **Next.js Light-Mode Frontend**.
+A full-stack, enterprise-grade Agentic AI dining and ordering platform for **ZaikaAI** engineered with **LangGraph Stateful Multi-Turn Agents**, **Qdrant Hybrid Vector RAG**, **Human-in-the-Loop (HITL) Safeguards**, **FastAPI Async Backend**, and a bespoke **Next.js Light-Mode Frontend**.
 
 ---
 
-## 🌟 Key Architecture & Capabilities
+## 🌟 Architecture & Agent Topology
 
 ```mermaid
 graph TD
-    User([Customer / Next.js UI]) <-->|REST & Streaming SSE| API[FastAPI Server :8000]
+    User([Customer / Next.js UI]) <-->|REST API & State Sync| API[FastAPI Server :8000]
     
     subgraph Multi-Agent LangGraph Pipeline
-        API <--> Memory[(MemorySaver / SQLite Checkpointer)]
+        API <--> Memory[(LangGraph MemorySaver Checkpointer)]
         API --> RouterNode[Supervisor Router Node]
         
-        RouterNode -->|Intent: Menu Inquiry / Dietary Qs| RAGNode[Qdrant RAG & Semantic Search]
-        RouterNode -->|Intent: Food Order / Modifications| OrderNode[Order Processor & Pydantic Parser]
-        RouterNode -->|Intent: Checkout / Confirmation| ValidationNode[Menu & Policy Validation Node]
-        RouterNode -->|Intent: General Conversation| ChatNode[Zaika Concierge Node]
+        RouterNode -->|Intent: Menu Inquiry / Dietary| RAGNode[Qdrant RAG & Semantic Search]
+        RouterNode -->|Intent: Food Order / Add / Remove| OrderNode[Order Processor & Entity Parser]
+        RouterNode -->|Intent: Checkout / Confirm| ValidationNode[Menu & Policy Validation Node]
+        RouterNode -->|Intent: General Conversation| ChatNode[Zaika Concierge Chat Node]
         
-        RAGNode <--> Qdrant[(Qdrant Vector DB: In-Memory / Cloud)]
+        RAGNode <--> Qdrant[(Qdrant Vector DB: Hybrid Search)]
         
-        ValidationNode -->|Condition: Total > Rs. 1000 or Custom Prep| HITLNode{Human-in-the-Loop Gate}
-        ValidationNode -->|Condition: Verified & Standard| KitchenNode[Kitchen Dispatch Node]
+        ValidationNode -->|Condition: Total >= Rs. 1000| HITLNode{Human-in-the-Loop Gate}
+        ValidationNode -->|Condition: Standard Order| KitchenNode[Kitchen Dispatch Node]
         
-        HITLNode -->|Approved by User/Manager| KitchenNode
+        HITLNode -->|Manager Approved| KitchenNode
         HITLNode -->|Rejected / Needs Changes| OrderNode
         
         KitchenNode --> ServingNode[Service & Table Delivery]
-        ServingNode --> END([Final State])
+        ServingNode --> END([Order Delivered])
     end
 ```
 
-### 1. Stateful Multi-Turn LangGraph
-- **Conversation Memory per Session**: Checkpointing via `MemorySaver` / SQLite checkpointer using `thread_id: session_id`.
-- **Multi-Turn Order Modifications**: Seamlessly add, remove, and update dishes across turns (*"remove one burger, add an ice cream, and what drink do you recommend?"*).
+---
 
-### 2. Qdrant Hybrid Vector RAG (100% Free Tier)
-- **Typo Tolerance & Colloquial Matching**: Automatically maps typos (e.g. `pzza` $\rightarrow$ `Artisan Margherita Pizza`, `burger` $\rightarrow$ `Gourmet Double Smash Burger`).
-- **Semantic Dietary Filters**: Natural language queries (*"spicy pasta under 250"*, *"vegan gluten-free drinks"*, *"chef specials"*).
-- **Dual Mode**: Embedded local in-memory (`:memory:`) with zero configuration, or Qdrant Cloud Free Tier cluster (1GB free forever).
+## ✨ Core Features & Capabilities
 
-### 3. Human-in-the-Loop (HITL) Gate
-- Demonstrates enterprise-grade LangGraph `interrupt()` protocol.
-- Automatically pauses execution on high-value orders (Rs. 1000+) or custom kitchen modifications, awaiting explicit human approval before kitchen firing.
+### 1. Stateful Multi-Turn LangGraph Orchestrator
+- **Thread-Level Checkpointing**: Stateful conversational memory keyed by `session_id`, allowing complex multi-turn modifications (*"change the pizza to wild mushroom, remove one drink, and add two lava cakes"*).
+- **Conversational Context Tracking**: The supervisor router and order extraction engine understand follow-up choices (e.g. answering *"wild pizza"* when asked for pizza options) and confirmations (*"yes"*, *"sure"*, *"add it"*).
 
-### 4. Live Agent Trace & Visual Graph Inspector
-- Frontend includes an interactive modal displaying real-time node transitions, tool calls, and execution latencies.
+### 2. Qdrant Hybrid Vector RAG & Typo Tolerance
+- **Sub-Millisecond Vector Search**: Dense cosine similarity search over culinary vectors enriched with ingredients, allergens, descriptions, and dietary tags.
+- **RapidFuzz Typo Resolution**: Automatically resolves typos and colloquial names (e.g. `piiza` $\rightarrow$ `Artisan Margherita Pizza`, `smooky paneer` $\rightarrow$ `Smoky BBQ Paneer Pizza`).
+- **Category Disambiguation**: When generic categories like `pizza` or `burger` are requested, the agent lists all varieties with prices and asks the customer to choose.
 
-### 5. Bespoke Next.js Light-Mode UI
-- Artisan culinary palette (`#E05A47` Terracotta, `#F59E0B` Amber, `#FAF7F2` Cream, `#10B981` Sage).
-- 100% responsive (Mobile, Tablet, Desktop).
-- Interactive category tabs, search bar, live bill calculator (5% GST), and kitchen timeline tracker.
+### 3. Human-in-the-Loop (HITL) Policy Gate
+- Uses LangGraph conditional interrupts for high-value orders ($\ge$ Rs. 1000) or special kitchen requests, triggering manager review before firing tickets to the kitchen pipeline.
+
+### 4. Interactive Next.js 14 Light-Mode UI
+- **Culinary Artisan Theme**: Warm palette (`#E05A47` Terracotta, `#F59E0B` Amber, `#FAF7F2` Cream, `#10B981` Sage).
+- **Unified Single-Frame Dashboard**: Inline tab switcher (`[💬 Chat]` / `[🛍️ Order]`) with zero vertical scrolling clutter.
+- **Live Bill Breakdown**: Real-time subtotal, 5% GST calculation, and animated kitchen preparation timeline (`Confirmed` $\rightarrow$ `Cooking` $\rightarrow$ `Ready` $\rightarrow$ `Served`).
+- **Telemetry & Tracing Modal**: Visual trace viewer showing agent nodes, tool executions, and step-by-step state checkpoint mutations.
 
 ---
 
 ## 📁 Repository Structure
 
-```
+```text
 Restaurant-agent/
-├── agent/                      # Core LangGraph Multi-Agent System
-│   ├── graph.py               # Compiled StateGraph with routing & checkpointer
-│   ├── nodes.py               # Agent nodes (Router, RAG, Order, HITL, Kitchen, Serving)
-│   ├── rag.py                 # Qdrant Vector DB & RapidFuzz hybrid engine
-│   ├── state.py               # TypedDict state & Cart schema
-│   └── tools.py               # Price calculation & menu utilities
-├── frontend/                  # Next.js 14 Light-Mode Web Application
+├── agent/                       # LangGraph Multi-Agent Backend
+│   ├── graph.py                # StateGraph compilation & MemorySaver checkpointer
+│   ├── nodes.py                # Agent nodes (Router, RAG, Order Extraction, HITL, Kitchen)
+│   ├── rag.py                  # Qdrant Vector Engine & RapidFuzz token matcher
+│   ├── state.py                # TypedDict schemas (RestaurantState, CartItem, AgentTrace)
+│   └── tools.py                # Menu computation and utility helpers
+├── frontend/                   # Next.js 14 Light-Mode Web Application
 │   ├── app/
-│   │   ├── globals.css        # Tailwind + Google Fonts design system
-│   │   ├── layout.tsx         # Root layout
-│   │   └── page.tsx           # Full responsive dashboard
+│   │   ├── globals.css         # Artisan design system tokens & animations
+│   │   ├── layout.tsx          # Root layout & SEO metadata
+│   │   └── page.tsx            # Main responsive dining interface
 │   ├── components/
-│   │   ├── Navbar.tsx         # Brand header & trace modal trigger
-│   │   ├── MenuExplorer.tsx   # Visual menu cards, filters & search
-│   │   ├── ChatAssistant.tsx  # Multi-turn AI Concierge drawer
-│   │   ├── LiveCart.tsx       # Live itemized bill & checkout
-│   │   ├── AgentTraceModal.tsx# LangGraph visual trace inspector
-│   │   ├── HITLModal.tsx      # Human-in-the-loop approval gate
-│   │   └── KitchenTimeline.tsx# Real-time cooking & delivery simulator
-│   ├── types/index.ts         # TypeScript definitions
-│   ├── tailwind.config.js     # Custom artisan color tokens
-│   └── package.json           # Frontend dependencies
-├── api.py                     # FastAPI backend REST service
-├── app.py                     # CLI fallback entry point
-├── menu.json                  # Enriched culinary dataset
-├── requirements.txt           # Python backend dependencies
-└── .env                       # Backend environment variables
+│   │   ├── Navbar.tsx          # Brand header & live status indicator
+│   │   ├── MenuExplorer.tsx    # Filterable dish cards, search & tags
+│   │   ├── ChatAssistant.tsx   # Single-frame AI Concierge & live cart
+│   │   ├── AgentTraceModal.tsx # LangGraph node telemetry inspector
+│   │   ├── HITLModal.tsx       # Human-in-the-loop approval gate
+│   │   └── KitchenTimeline.tsx # Order cooking & delivery tracker
+│   ├── types/index.ts          # TypeScript state definitions
+│   └── package.json            # Frontend dependencies
+├── api.py                      # FastAPI REST API service
+├── menu.json                   # Enriched 18-dish artisan menu dataset
+├── requirements.txt            # Python dependencies
+├── AGENTS.md                   # AI agent codebase context & architecture map
+└── .agents/skills/             # Antigravity agent skill definition
 ```
 
 ---
 
 ## 🚀 Quick Start (Local Setup)
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+ and npm
-
 ### 1. Backend Setup (FastAPI & LangGraph)
 
 ```bash
-# Clone repository
-git clone https://github.com/your-username/Restaurant-agent.git
-cd Restaurant-agent
+# Clone the repository
+git clone https://github.com/Awanish9230/restaurant-agent.git
+cd restaurant-agent
 
 # Install Python dependencies
 pip install -r requirements.txt
 
-# Configure .env file
-# (Create .env in the root directory)
-GROQ_API_KEY=your_groq_api_key_here
-GROQ_MODEL=openai/gpt-oss-120b
+# Create .env in the root directory
+# GROQ_API_KEY=your_groq_api_key_here
+# GROQ_MODEL=openai/gpt-oss-120b
 
-# Optional: Qdrant Cloud (leave blank for local in-memory mode)
-# QDRANT_URL=https://your-cluster.qdrant.io:6333
-# QDRANT_API_KEY=your_qdrant_api_key
-
-# Start FastAPI backend
+# Start the FastAPI server
 python -m uvicorn api:app --host 127.0.0.1 --port 8000 --reload
 ```
 
@@ -129,56 +119,43 @@ Backend will be live at `http://127.0.0.1:8000`. Test health: `http://127.0.0.1:
 
 ---
 
-### 2. Frontend Setup (Next.js)
+### 2. Frontend Setup (Next.js 14)
 
 ```bash
-# Navigate to frontend directory
+# Navigate to frontend folder
 cd frontend
 
-# Install npm dependencies
+# Install dependencies
 npm install
 
 # Start development server
 npm run dev
 ```
 
-Open `http://localhost:3000` in your browser to experience the full application!
+Open `http://localhost:3000` in your browser to experience the full application.
 
 ---
 
-## 🌐 Production Deployment (100% Free Tier)
+## 📡 API Endpoints Reference
 
-### Deploy Backend to Render (Free Web Service)
-1. Push this repository to GitHub.
-2. Go to [Render.com](https://render.com) $\rightarrow$ New **Web Service**.
-3. Set **Runtime**: `Python 3`.
-4. Set **Build Command**: `pip install -r requirements.txt`.
-5. Set **Start Command**: `uvicorn api:app --host 0.0.0.0 --port $PORT`.
-6. Add Environment Variables:
-   - `GROQ_API_KEY`: Your Groq API key
-   - `GROQ_MODEL`: `openai/gpt-oss-120b` (or `qwen/qwen3.8-27b`)
-   - `QDRANT_URL` (optional): Qdrant cloud cluster endpoint
-   - `QDRANT_API_KEY` (optional): Qdrant cloud API key
-7. Deploy! Your backend URL will be `https://your-app.onrender.com`.
-
-### Deploy Frontend to Vercel (Free Serverless)
-1. Go to [Vercel.com](https://vercel.com) $\rightarrow$ Add New Project $\rightarrow$ Import your GitHub repo.
-2. Set **Root Directory**: `frontend`.
-3. Add Environment Variable:
-   - `NEXT_PUBLIC_API_URL`: `https://your-app.onrender.com`
-4. Click **Deploy**!
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/api/health` | Health check & model status |
+| `GET` | `/api/menu` | Complete menu items and category lists |
+| `POST` | `/api/chat` | Main stateful chat endpoint invoking LangGraph pipeline |
+| `POST` | `/api/cart/action` | Mutate cart directly (`add`, `increment`, `decrement`, `remove`, `clear`) |
+| `POST` | `/api/hitl/action` | Approve or reject pending high-value orders |
+| `POST` | `/api/kitchen/advance` | Advance order state (`confirmed` $\rightarrow$ `cooking` $\rightarrow$ `ready` $\rightarrow$ `served`) |
 
 ---
 
-## 💼 Resume Bullet Points
+## 💼 Key Engineering Highlights (For Portfolio & Resume)
 
-Add these powerful points to your Resume and LinkedIn portfolio:
-
-- **Full-Stack Multi-Agent Restaurant Orchestrator**: *Engineered a stateful multi-agent restaurant ordering platform using **LangGraph 2.0**, **FastAPI**, and **Next.js 14**, featuring conversational memory checkpointing, structured Pydantic entity extraction, and **Human-in-the-Loop (HITL)** approval gates for orders above Rs. 1000.*
-- **Hybrid Vector RAG with Qdrant**: *Designed a sub-millisecond semantic menu retrieval engine leveraging **Qdrant Vector Database** with dense embeddings and **RapidFuzz** hybrid search, resolving food typos (e.g. `pzza` $\rightarrow$ `Margherita Pizza`) and natural language dietary filters with 98% accuracy.*
-- **Zero-Cost Production Deployment**: *Optimized server memory footprint (<160MB RAM) for zero-downtime deployment on Render free tier and Vercel edge runtime, integrating real-time telemetry and state inspection modals for interactive agent execution visualization.*
+- **Stateful Multi-Turn Orchestration**: Engineered an agentic state machine using **LangGraph 2.0** with conversational checkpointing, schema-validated entity parsing, and **Human-in-the-Loop (HITL)** approval workflows.
+- **Hybrid Semantic RAG**: Developed a vector search engine using **Qdrant Cloud** and **RapidFuzz** token scoring to achieve typo tolerance, semantic dietary filtering, and category disambiguation.
+- **Real-Time Telemetry & Visualization**: Integrated live graph trace inspection into the Next.js UI, exposing state transitions and node execution metadata for explainable AI interactions.
 
 ---
 
 ## 📜 License
-MIT License. Built for showcasing advanced Agentic AI & Generative AI engineering.
+MIT License. Built for demonstrating cutting-edge Agentic AI & Generative AI system design.
