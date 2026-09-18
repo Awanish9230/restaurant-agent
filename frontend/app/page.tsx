@@ -278,82 +278,31 @@ export default function Home() {
           </div>
 
           {/* Right Column (Single-Frame AI Concierge & Cart Dashboard) - 5 cols */}
-          <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-20">
-            {/* Sidebar View Mode Tabs */}
-            <div className="flex items-center p-1 bg-white rounded-2xl border border-artisan-sand/80 shadow-subtle">
-              <button
-                onClick={() => setActiveSidebarTab("chat")}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
-                  activeSidebarTab === "chat"
-                    ? "bg-artisan-terracotta text-white shadow-glow"
-                    : "text-artisan-slate hover:text-artisan-charcoal hover:bg-artisan-cream"
-                }`}
-              >
-                <Bot className="w-4 h-4" />
-                <span>AI Maitre D' Concierge</span>
-              </button>
-
-              <button
-                onClick={() => setActiveSidebarTab("cart")}
-                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
-                  activeSidebarTab === "cart"
-                    ? "bg-artisan-terracotta text-white shadow-glow"
-                    : "text-artisan-slate hover:text-artisan-charcoal hover:bg-artisan-cream"
-                }`}
-              >
-                <ShoppingBag className="w-4 h-4" />
-                <span>Order Summary</span>
-                {state.cart.length > 0 && (
-                  <span
-                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                      activeSidebarTab === "cart"
-                        ? "bg-white text-artisan-terracotta"
-                        : "bg-artisan-terracotta text-white"
-                    }`}
-                  >
-                    {state.cart.reduce((a, b) => a + b.quantity, 0)}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* Active Sidebar Tab View */}
-            {activeSidebarTab === "chat" ? (
-              <div id="chat-assistant-panel" className="scroll-mt-24">
-                <ChatAssistant
-                  messages={state.messages}
-                  suggestedPrompts={state.suggested_prompts}
-                  isThinking={isThinking}
-                  onSendMessage={handleSendMessage}
-                  customerName={state.customer_name}
-                  cart={state.cart}
-                  subtotal={state.subtotal}
-                  tax={state.tax}
-                  total={state.total}
-                  orderStatus={state.order_status}
-                  onConfirmOrder={handleConfirmOrder}
-                  onClearCart={() => handleCartAction("", "clear")}
-                  hitlRequired={state.hitl_required}
-                  hitlReason={state.hitl_reason}
-                  onApproveHITL={() => handleHITLAction("approve")}
-                  onRejectHITL={() => handleHITLAction("reject")}
-                />
-              </div>
-            ) : (
-              <LiveCart
+          <div className="lg:col-span-5 lg:sticky lg:top-20">
+            <div id="chat-assistant-panel" className="scroll-mt-24">
+              <ChatAssistant
+                messages={state.messages}
+                suggestedPrompts={state.suggested_prompts}
+                isThinking={isThinking}
+                onSendMessage={handleSendMessage}
+                customerName={state.customer_name}
                 cart={state.cart}
                 subtotal={state.subtotal}
                 tax={state.tax}
                 total={state.total}
                 orderStatus={state.order_status}
+                onConfirmOrder={handleConfirmOrder}
+                onClearCart={() => handleCartAction("", "clear")}
                 onIncrement={(slug) => handleCartAction(slug, "increment")}
                 onDecrement={(slug) => handleCartAction(slug, "decrement")}
                 onRemove={(slug) => handleCartAction(slug, "remove")}
-                onClear={() => handleCartAction("", "clear")}
-                onConfirmOrder={handleConfirmOrder}
+                hitlRequired={state.hitl_required}
+                hitlReason={state.hitl_reason}
+                onApproveHITL={() => handleHITLAction("approve")}
+                onRejectHITL={() => handleHITLAction("reject")}
                 isProcessing={isProcessing || isThinking}
               />
-            )}
+            </div>
           </div>
         </div>
       </main>
