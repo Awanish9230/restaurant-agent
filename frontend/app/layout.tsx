@@ -4,6 +4,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "GourmetAI Bistro | Multi-Agent Dining Experience",
   description: "Stateful Multi-Agent Restaurant Ordering System powered by LangGraph, Qdrant Vector RAG, and FastAPI.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
