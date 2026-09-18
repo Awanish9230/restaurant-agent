@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Utensils, RefreshCw, Cpu } from "lucide-react";
+import { Utensils, RefreshCw, Cpu, Bot } from "lucide-react";
 
 interface NavbarProps {
   backendHealthy: boolean;
@@ -42,6 +42,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               />
               <span>{backendHealthy ? "Live" : "Offline"}</span>
             </div>
+
+            {/* Quick Jump to AI Chat */}
+            <button
+              onClick={() => {
+                document.getElementById("chat-assistant-panel")?.scrollIntoView({ behavior: "smooth" });
+                const input = document.querySelector<HTMLInputElement>("#chat-assistant-panel input");
+                input?.focus();
+              }}
+              className="flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-artisan-terracotta text-white hover:bg-artisan-terracottaHover shadow-glow transition-all active:scale-95"
+            >
+              <Bot className="w-3.5 h-3.5" />
+              <span>Chat</span>
+            </button>
 
             {/* Trace Inspector */}
             <button

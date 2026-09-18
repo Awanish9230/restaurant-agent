@@ -76,17 +76,31 @@ class MenuRAG:
         return vector
 
     def _initialize_vector_db(self):
-        # Recreate collection
         try:
-            self.client.delete_collection(collection_name=self.COLLECTION_NAME)
-        except Exception:
-            pass
+            exists = self.client.collection_exists(collection_name=self.COLLECTION_NAME)
+            if not exists:
+                self.client.create_collection(
+                    collection_name=self.COLLECTION_NAME,
+                    vectors_config=VectorParams(size=self.VECTOR_DIM, distance=Distance.COSINE),
+                )
+                self._upsert_all_points()
+            else:
+                info = self.client.get_collection(collection_name=self.COLLECTION_NAME)
+                if (info.points_count or 0) < len(self.menu_data):
+                    self._upsert_all_points()
+        except Exception as e:
+            # If any schema mismatch, recreate safely
+            try:
+                self.client.delete_collection(collection_name=self.COLLECTION_NAME)
+                self.client.create_collection(
+                    collection_name=self.COLLECTION_NAME,
+                    vectors_config=VectorParams(size=self.VECTOR_DIM, distance=Distance.COSINE),
+                )
+                self._upsert_all_points()
+            except Exception:
+                pass
 
-        self.client.create_collection(
-            collection_name=self.COLLECTION_NAME,
-            vectors_config=VectorParams(size=self.VECTOR_DIM, distance=Distance.COSINE),
-        )
-
+    def _upsert_all_points(self):
         points = []
         for idx, (slug, item) in enumerate(self.menu_data.items()):
             full_text = f"{item['name']} {item['category']} {item['description']} {' '.join(item['ingredients'])} {' '.join(item['dietary'])}"
@@ -170,12 +184,40 @@ class MenuRAG:
         category: Optional[str] = None,
         dietary: Optional[str] = None,
         max_price: Optional[float] = None,
-        limit: int = 4
+        limit: int = 15
     ) -> List[Dict[str, Any]]:
-        """Hybrid Vector + Filter search in Qdrant."""
+        """Hybrid Vector + Filter + Keyword search in Qdrant."""
+        q_clean = query.lower().strip()
+        all_items = self.get_all_menu()
+
+        # 1. Full menu inquiry
+        if any(w in q_clean for w in ["all", "menu", "everything", "options", "available", "full"]):
+            # Filter if dietary or category specified
+            filtered = all_items
+            if category and category.lower() != "all":
+                filtered = [i for i in filtered if i.get("category", "").lower() == category.lower()]
+            if dietary:
+                filtered = [i for i in filtered if dietary.lower() in [d.lower() for d in i.get("dietary", [])]]
+            if max_price is not None:
+                filtered = [i for i in filtered if i.get("price", 0) <= max_price]
+            if filtered:
+                return filtered[:limit]
+
+        # 2. Category / Keyword specific inquiry (e.g. "burger", "pizza", "pasta", "drink", "dessert")
+        keywords = ["burger", "pizza", "pasta", "drink", "coffee", "dessert", "ice cream", "gelato", "lemonade"]
+        matched_items = []
+        for kw in keywords:
+            if kw in q_clean:
+                for item in all_items:
+                    name_slug = (item["name"] + " " + item["slug"] + " " + " ".join(item.get("aliases", []))).lower()
+                    if kw in name_slug and item not in matched_items:
+                        matched_items.append(item)
+
+        if matched_items:
+            return matched_items[:limit]
+
+        # 3. Dense Vector search in Qdrant Cloud
         query_vector = self._embed_text(query)
-        
-        # Build Qdrant filters
         must_conditions = []
         if category and category.lower() != "all":
             must_conditions.append(FieldCondition(key="category", match=MatchValue(value=category.lower())))
@@ -197,11 +239,8 @@ class MenuRAG:
         except Exception:
             hits = []
 
-        # If vector search returned few results, supplement with fuzzy/keyword search
-        if len(hits) < limit:
-            fuzzy_item = self.fuzzy_match_dish(query)
-            if fuzzy_item and not any(h["slug"] == fuzzy_item["slug"] for h in hits):
-                hits.append(fuzzy_item)
+        if not hits:
+            hits = all_items[:6]
 
         return hits[:limit]
 

@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from datetime import datetime
 from typing import Dict, Any, List, Optional
@@ -81,15 +82,24 @@ Guidelines:
     }
 
 
+def _clean_text(text: str) -> str:
+    """Removes raw markdown bold/italic asterisks and normalizes unicode characters for clean humanized chat."""
+    clean = text.replace("\u202f", " ").replace("\xa0", " ").replace("\u2011", "-").replace("\u2013", "-").replace("\u2014", "-")
+    clean = re.sub(r"\*\*([^*]+)\*\*", r"\1", clean)
+    clean = re.sub(r"\*([^*]+)\*", r"\1", clean)
+    clean = clean.replace("**", "").replace("*", "")
+    return clean.strip()
+
+
 def rag_menu_node(state: RestaurantState) -> Dict[str, Any]:
     """Semantic RAG node searching Qdrant vector database for menu answers."""
     user_msg = state["user_message"]
     trace = _log_trace(state, "Qdrant RAG Engine", "Vector Similarity Search", f"Searching vector index for: '{user_msg}'")
 
-    # Search in Qdrant
-    hits = rag_engine.search(user_msg, limit=4)
+    # Search in Qdrant / Hybrid RAG
+    hits = rag_engine.search(user_msg, limit=15)
     if not hits:
-        hits = rag_engine.get_all_menu()[:4]
+        hits = rag_engine.get_all_menu()
 
     menu_context = "\n\n".join([
         f"Dish: {h['name']}\nCategory: {h['category']}\nPrice: Rs.{h['price']}\nDietary: {', '.join(h['dietary'])}\nSpicy: {h['spicy_level']}/3\nCalories: {h['calories']} kcal\nDescription: {h['description']}\nIngredients: {', '.join(h['ingredients'])}"
@@ -97,21 +107,24 @@ def rag_menu_node(state: RestaurantState) -> Dict[str, Any]:
     ])
 
     prompt = f"""You are the friendly, knowledgeable Maitre D' of 'GourmetAI Bistro'.
-Answer the customer's query using the verified menu context below.
+Answer the customer's query accurately and comprehensively using ONLY the verified menu context below.
 
 Customer Query: "{user_msg}"
 
 Verified Menu Context:
 {menu_context}
 
-Guidelines:
-1. Speak warmly and appetizingly.
-2. Mention exact dish names and prices in Rs.
-3. Highlight dietary perks (vegetarian, vegan, gluten-free) if asked.
-4. Encourage them to add their favorite dish to their order!
+CRITICAL Guidelines:
+1. When asked how many items or what varieties of an item exist (e.g. burgers, pizzas, pastas, drinks, desserts, or the full menu), you MUST list ALL matching items present in the Verified Menu Context. Do NOT omit any dishes.
+2. For specific questions like 'how many types of burger do you have', state the exact count and describe each burger variety with its name, price, key ingredients, and dietary notes.
+3. For full menu queries ('show me what is on the menu', 'what do you serve'), group and list all items categorized by Pizzas, Burgers, Pastas, Drinks, and Desserts with their prices.
+4. Speak warmly, courteously, and appetizingly.
+5. NEVER use asterisks (**) or markdown bold marks in your text. Keep the output clean, natural, and humanized.
+6. End with a polite recommendation or invitation to add something to their order.
 """
 
-    response = llm.invoke([HumanMessage(content=prompt)]).content
+    raw_response = llm.invoke([HumanMessage(content=prompt)]).content
+    response = _clean_text(raw_response)
 
     prompts = [
         "Add 1 Margherita Pizza to my order",
@@ -208,7 +221,7 @@ Return ONLY JSON in this format:
     subtotal, tax, total = _recalculate_cart_totals(current_cart)
 
     cart_summary = ", ".join([f"{i['quantity']}x {i['name']}" for i in current_cart])
-    full_response = f"{assistant_reply}\n\n**Current Cart:** {cart_summary if cart_summary else 'Empty'}\n**Total:** Rs.{total}"
+    full_response = f"{assistant_reply}\n\nCurrent Cart: {cart_summary if cart_summary else 'Empty'}\nTotal: Rs.{total}"
 
     return {
         "agent_trace": trace,
@@ -246,14 +259,14 @@ def validation_hitl_node(state: RestaurantState) -> Dict[str, Any]:
     has_special_notes = any(item.get("notes") for item in cart)
 
     if has_high_value or has_special_notes:
-        reason = "High-value VIP order (Rs. 1000+) requiring final verification" if has_high_value else "Custom culinary preparation notes require kitchen confirmation"
+        reason = "High-value order (Rs. 1000+) requiring final verification" if has_high_value else "Custom culinary preparation notes require kitchen confirmation"
         trace = _log_trace(state, "HITL Gate Interruption", "Awaiting Human Approval", reason)
         return {
             "agent_trace": trace,
             "hitl_required": True,
             "hitl_reason": reason,
             "order_status": "awaiting_approval",
-            "response": f"⚠️ **Human-in-the-Loop Gate Triggered**: {reason}.\n\nPlease click **Confirm & Place Order** in the UI to proceed."
+            "response": f"⚠️ Human-in-the-Loop Verification Required: {reason}.\n\nPlease click Confirm & Place Order in your order summary to proceed."
         }
 
     return {
@@ -261,7 +274,7 @@ def validation_hitl_node(state: RestaurantState) -> Dict[str, Any]:
         "hitl_required": False,
         "hitl_reason": None,
         "order_status": "confirmed",
-        "response": f"🎉 **Order Confirmed!** Your order of Rs.{total} has been sent to the kitchen."
+        "response": f"🎉 Order Confirmed! Your order of Rs.{total} has been sent to the kitchen."
     }
 
 
@@ -271,7 +284,7 @@ def kitchen_dispatch_node(state: RestaurantState) -> Dict[str, Any]:
     return {
         "agent_trace": trace,
         "order_status": "cooking",
-        "response": "👨‍🍳 **Kitchen Dispatch**: Your food is now being prepared fresh in the kitchen!"
+        "response": "👨‍🍳 Kitchen Dispatch: Your food is now being prepared fresh in the kitchen!"
     }
 
 
@@ -283,7 +296,7 @@ def serving_node(state: RestaurantState) -> Dict[str, Any]:
     return {
         "agent_trace": trace,
         "order_status": "served",
-        "response": f"🍽️ **Delivered!** Enjoy your meal, {name}! Total paid: Rs.{total}. Thank you for dining with GourmetAI Bistro."
+        "response": f"🍽️ Delivered! Enjoy your meal, {name}! Total paid: Rs.{total}. Thank you for dining with GourmetAI Bistro."
     }
 
 
@@ -299,8 +312,10 @@ Customer Name: {name or 'Valued Guest'}
 Active Cart Items: {len(state.get('cart', []))}
 
 Invite them to explore our wood-fired pizzas, gourmet smash burgers, artisanal pastas, and desserts!
+Do NOT use asterisks (**) or markdown bold marks. Keep output clean and natural.
 """
-    response = llm.invoke([HumanMessage(content=prompt)]).content
+    raw_response = llm.invoke([HumanMessage(content=prompt)]).content
+    response = _clean_text(raw_response)
 
     return {
         "agent_trace": trace,

@@ -220,7 +220,7 @@ def handle_hitl_action(req: HITLAction):
         state["hitl_required"] = False
         state["hitl_reason"] = None
         state["order_status"] = "cooking"
-        state["response"] = "👨‍🍳 **Order Approved & Dispatched!** The kitchen has started preparing your gourmet meal."
+        state["response"] = "👨‍🍳 Order Approved & Dispatched! The kitchen has started preparing your gourmet meal."
         state["agent_trace"].append({
             "node": "HITL Approval Gate",
             "action": "Human Authorization",
@@ -251,7 +251,7 @@ def advance_kitchen_status(session_id: str):
 
     if next_status == "served":
         name = state.get("customer_name") or "Valued Guest"
-        state["response"] = f"🍽️ **Delivered!** Enjoy your exquisite meal, {name}! Thank you for dining with GourmetAI Bistro."
+        state["response"] = f"🍽️ Delivered! Enjoy your exquisite meal, {name}! Thank you for dining with GourmetAI Bistro."
 
     SESSION_STATE_CACHE[session_id] = state
     return state

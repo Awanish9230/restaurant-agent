@@ -9,6 +9,7 @@ import { LiveCart } from "../components/LiveCart";
 import { AgentTraceModal } from "../components/AgentTraceModal";
 import { HITLModal } from "../components/HITLModal";
 import { KitchenTimeline } from "../components/KitchenTimeline";
+import { Bot, ShoppingBag } from "lucide-react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
@@ -20,6 +21,7 @@ export default function Home() {
   const [isThinking, setIsThinking] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [isTraceOpen, setIsTraceOpen] = useState<boolean>(false);
+  const [activeSidebarTab, setActiveSidebarTab] = useState<"chat" | "cart">("chat");
 
   const [state, setState] = useState<RestaurantState>({
     session_id: "session-default",
@@ -28,7 +30,7 @@ export default function Home() {
     messages: [
       {
         role: "assistant",
-        content: "👋 Welcome to **GourmetAI Bistro**! I am your AI concierge powered by **LangGraph & Qdrant Vector RAG**.\n\nYou can order dishes, ask about dietary ingredients, modify items, or inquire about chef specials. How can I serve you today?",
+        content: "👋 Welcome to GourmetAI Bistro! I am your AI concierge. You can order dishes, ask about dietary ingredients, modify items, or inquire about chef specials. How can I serve you today?",
       },
     ],
     cart: [],
@@ -275,34 +277,99 @@ export default function Home() {
             />
           </div>
 
-          {/* Right Column (Live Cart & AI Chat Assistant) - 5 cols */}
-          <div className="lg:col-span-5 space-y-6 lg:sticky lg:top-24">
-            {/* Live Cart Component */}
-            <LiveCart
-              cart={state.cart}
-              subtotal={state.subtotal}
-              tax={state.tax}
-              total={state.total}
-              orderStatus={state.order_status}
-              onIncrement={(slug) => handleCartAction(slug, "increment")}
-              onDecrement={(slug) => handleCartAction(slug, "decrement")}
-              onRemove={(slug) => handleCartAction(slug, "remove")}
-              onClear={() => handleCartAction("", "clear")}
-              onConfirmOrder={handleConfirmOrder}
-              isProcessing={isProcessing || isThinking}
-            />
+          {/* Right Column (Single-Frame AI Concierge & Cart Dashboard) - 5 cols */}
+          <div className="lg:col-span-5 space-y-4 lg:sticky lg:top-20">
+            {/* Sidebar View Mode Tabs */}
+            <div className="flex items-center p-1 bg-white rounded-2xl border border-artisan-sand/80 shadow-subtle">
+              <button
+                onClick={() => setActiveSidebarTab("chat")}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+                  activeSidebarTab === "chat"
+                    ? "bg-artisan-terracotta text-white shadow-glow"
+                    : "text-artisan-slate hover:text-artisan-charcoal hover:bg-artisan-cream"
+                }`}
+              >
+                <Bot className="w-4 h-4" />
+                <span>AI Maitre D' Concierge</span>
+              </button>
 
-            {/* AI Concierge Chat Assistant */}
-            <ChatAssistant
-              messages={state.messages}
-              suggestedPrompts={state.suggested_prompts}
-              isThinking={isThinking}
-              onSendMessage={handleSendMessage}
-              customerName={state.customer_name}
-            />
+              <button
+                onClick={() => setActiveSidebarTab("cart")}
+                className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center space-x-1.5 ${
+                  activeSidebarTab === "cart"
+                    ? "bg-artisan-terracotta text-white shadow-glow"
+                    : "text-artisan-slate hover:text-artisan-charcoal hover:bg-artisan-cream"
+                }`}
+              >
+                <ShoppingBag className="w-4 h-4" />
+                <span>Order Summary</span>
+                {state.cart.length > 0 && (
+                  <span
+                    className={`ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                      activeSidebarTab === "cart"
+                        ? "bg-white text-artisan-terracotta"
+                        : "bg-artisan-terracotta text-white"
+                    }`}
+                  >
+                    {state.cart.reduce((a, b) => a + b.quantity, 0)}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Active Sidebar Tab View */}
+            {activeSidebarTab === "chat" ? (
+              <div id="chat-assistant-panel" className="scroll-mt-24">
+                <ChatAssistant
+                  messages={state.messages}
+                  suggestedPrompts={state.suggested_prompts}
+                  isThinking={isThinking}
+                  onSendMessage={handleSendMessage}
+                  customerName={state.customer_name}
+                  cart={state.cart}
+                  subtotal={state.subtotal}
+                  tax={state.tax}
+                  total={state.total}
+                  orderStatus={state.order_status}
+                  onConfirmOrder={handleConfirmOrder}
+                  onClearCart={() => handleCartAction("", "clear")}
+                  hitlRequired={state.hitl_required}
+                  hitlReason={state.hitl_reason}
+                  onApproveHITL={() => handleHITLAction("approve")}
+                  onRejectHITL={() => handleHITLAction("reject")}
+                />
+              </div>
+            ) : (
+              <LiveCart
+                cart={state.cart}
+                subtotal={state.subtotal}
+                tax={state.tax}
+                total={state.total}
+                orderStatus={state.order_status}
+                onIncrement={(slug) => handleCartAction(slug, "increment")}
+                onDecrement={(slug) => handleCartAction(slug, "decrement")}
+                onRemove={(slug) => handleCartAction(slug, "remove")}
+                onClear={() => handleCartAction("", "clear")}
+                onConfirmOrder={handleConfirmOrder}
+                isProcessing={isProcessing || isThinking}
+              />
+            )}
           </div>
         </div>
       </main>
+
+      {/* Floating Action Button on Mobile/Tablet to Jump Directly to Chat */}
+      <button
+        onClick={() => {
+          document.getElementById("chat-assistant-panel")?.scrollIntoView({ behavior: "smooth" });
+          const input = document.querySelector<HTMLInputElement>("#chat-assistant-panel input");
+          input?.focus();
+        }}
+        className="fixed bottom-6 right-6 z-40 lg:hidden flex items-center space-x-2 bg-artisan-terracotta hover:bg-artisan-terracottaHover text-white px-4 py-3 rounded-full shadow-glow active:scale-95 transition-all text-xs font-bold"
+      >
+        <span className="w-2 h-2 rounded-full bg-artisan-sage animate-pulse" />
+        <span>💬 Ask AI Concierge</span>
+      </button>
 
       {/* Modals */}
       <AgentTraceModal
