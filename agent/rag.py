@@ -4,9 +4,12 @@ import math
 import re
 from pathlib import Path
 from typing import List, Dict, Any, Optional
+from dotenv import load_dotenv
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue, Range
 from rapidfuzz import process, fuzz
+
+load_dotenv()
 
 MENU_PATH = Path(__file__).parent.parent / "menu.json"
 
@@ -14,11 +17,7 @@ MENU_PATH = Path(__file__).parent.parent / "menu.json"
 class MenuRAG:
     """
     Production-grade RAG and Hybrid Vector Search Engine for Restaurant Menu.
-    Supports:
-    1. Qdrant Vector Search (Local in-memory ':memory:' or Qdrant Cloud Cluster)
-    2. Dense TF-IDF / Normalized Term Vector Embeddings (ultra-fast, 0MB PyTorch overhead)
-    3. RapidFuzz Typo-tolerant Lexical Matching
-    4. Payload Filtering (Dietary, Category, Max Price, Spicy Level)
+    Connected directly to Qdrant Cloud Cluster.
     """
 
     COLLECTION_NAME = "restaurant_menu"
@@ -29,14 +28,15 @@ class MenuRAG:
         self.vocabulary: List[str] = []
         self._build_vocabulary()
         
-        # Initialize Qdrant Client (Dual-mode: Cloud or In-Memory)
+        # Initialize Qdrant Client (Using Qdrant Cloud Cluster)
         qdrant_url = os.getenv("QDRANT_URL")
         qdrant_api_key = os.getenv("QDRANT_API_KEY")
 
         if qdrant_url and qdrant_api_key:
+            print(f"Connecting to Qdrant Cloud Cluster: {qdrant_url}")
             self.client = QdrantClient(url=qdrant_url, api_key=qdrant_api_key)
         else:
-            self.client = QdrantClient(":memory:")
+            raise ValueError("QDRANT_URL and QDRANT_API_KEY must be configured in .env for Qdrant Cloud Cluster.")
 
         self._initialize_vector_db()
 
