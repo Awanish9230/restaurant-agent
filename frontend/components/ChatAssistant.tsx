@@ -101,7 +101,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
           </div>
           <div>
             <h3 className="font-serif text-sm font-bold text-artisan-charcoal leading-tight">
-              AI Maitre D'
+              AI Zaika Concierge
             </h3>
             <p className="text-[10px] text-artisan-muted flex items-center">
               <span className="w-1.5 h-1.5 rounded-full bg-artisan-sage mr-1 animate-pulse" />
@@ -339,7 +339,7 @@ export const ChatAssistant: React.FC<ChatAssistantProps> = ({
                   onClick={() => setActiveTab("chat")}
                   className="text-xs text-artisan-terracotta font-bold underline"
                 >
-                  Ask AI Maitre D' for suggestions
+                  Ask AI Zaika Concierge for suggestions
                 </button>
               </div>
             ) : (

@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "GourmetAI Bistro | Multi-Agent Dining Experience",
-  description: "Stateful Multi-Agent Restaurant Ordering System powered by LangGraph, Qdrant Vector RAG, and FastAPI.",
+  title: "ZaikaAI | Indian & Global Artisan Dining Experience",
+  description: "Stateful Multi-Agent Restaurant Ordering System for ZaikaAI powered by LangGraph, Qdrant Vector RAG, and FastAPI.",
   icons: {
     icon: "/icon.svg",
     shortcut: "/icon.svg",

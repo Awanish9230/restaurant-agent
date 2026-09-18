@@ -1,6 +1,6 @@
-# 🎨 GourmetAI Bistro — Next.js 14 Light-Mode Frontend
+# 🎨 ZaikaAI — Next.js 14 Light-Mode Frontend
 
-A modern, 100% responsive, bespoke Light-Mode web application designed for the **GourmetAI Bistro Agentic Ordering System**.
+A modern, 100% responsive, bespoke Light-Mode web application designed for the **ZaikaAI Agentic Dining & Ordering System**.
 
 ---
 

@@ -1,4 +1,4 @@
-# 🍽️ GourmetAI Bistro — Stateful Multi-Agent Dining & Ordering System
+# 🍽️ ZaikaAI — Stateful Multi-Agent Dining & Ordering System
 
 [![LangGraph 2.0](https://img.shields.io/badge/LangGraph-2.0-orange.svg)](https://github.com/langchain-ai/langgraph)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111+-009688.svg)](https://fastapi.tiangolo.com)
@@ -6,7 +6,7 @@
 [![Qdrant Vector DB](https://img.shields.io/badge/Qdrant-Cloud_%26_Embedded-red.svg)](https://qdrant.tech)
 [![Zero-Cost Free Tier](https://img.shields.io/badge/Free_Tier-Render_%2B_Vercel-brightgreen.svg)]()
 
-A production-grade, resume-defining Agentic AI full-stack application built with **LangGraph Stateful Multi-Turn Agents**, **Qdrant Hybrid Vector RAG**, **Human-in-the-Loop (HITL) Safeguards**, **FastAPI Async Backend**, and an ultra-polished **Next.js Light-Mode Frontend**.
+A production-grade, resume-defining Agentic AI full-stack application for **ZaikaAI** built with **LangGraph Stateful Multi-Turn Agents**, **Qdrant Hybrid Vector RAG**, **Human-in-the-Loop (HITL) Safeguards**, **FastAPI Async Backend**, and an ultra-polished **Next.js Light-Mode Frontend**.
 
 ---
 
@@ -23,7 +23,7 @@ graph TD
         RouterNode -->|Intent: Menu Inquiry / Dietary Qs| RAGNode[Qdrant RAG & Semantic Search]
         RouterNode -->|Intent: Food Order / Modifications| OrderNode[Order Processor & Pydantic Parser]
         RouterNode -->|Intent: Checkout / Confirmation| ValidationNode[Menu & Policy Validation Node]
-        RouterNode -->|Intent: General Conversation| ChatNode[Maitre D Concierge Node]
+        RouterNode -->|Intent: General Conversation| ChatNode[Zaika Concierge Node]
         
         RAGNode <--> Qdrant[(Qdrant Vector DB: In-Memory / Cloud)]
         

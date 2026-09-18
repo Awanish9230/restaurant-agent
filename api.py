@@ -18,8 +18,8 @@ from agent.rag import rag_engine
 from agent.state import RestaurantState
 
 app = FastAPI(
-    title="GourmetAI Bistro - Agentic API",
-    description="Multi-Agent LangGraph Backend with Qdrant Vector RAG and HITL Gate",
+    title="ZaikaAI - Agentic Dining API",
+    description="Multi-Agent LangGraph Backend with Qdrant Vector RAG and HITL Gate for ZaikaAI",
     version="2.0.0"
 )
 
@@ -76,10 +76,10 @@ def _get_or_create_state(session_id: str, customer_name: Optional[str] = None) -
         "hitl_required": False,
         "hitl_reason": None,
         "agent_trace": [],
-        "response": "Welcome to GourmetAI Bistro! I am your AI concierge. How may I delight your palate today?",
+        "response": "Namaste & Welcome to ZaikaAI! I am your AI dining concierge. How may I delight your palate today?",
         "suggested_prompts": [
             "Show me chef specials",
-            "I'd like 1 Margherita Pizza & 1 Coke",
+            "I'd like 1 Smoky BBQ Paneer Pizza & 1 Masala Chai",
             "What vegan options are available?",
             "Any spicy pasta under Rs. 250?"
         ]
@@ -92,7 +92,7 @@ def _get_or_create_state(session_id: str, customer_name: Optional[str] = None) -
 def health_check():
     return {
         "status": "healthy",
-        "service": "GourmetAI Bistro Agent Backend",
+        "service": "ZaikaAI Agent Backend",
         "version": "2.0.0",
         "qdrant_status": "connected",
         "model": os.getenv("GROQ_MODEL", "openai/gpt-oss-120b")
@@ -251,7 +251,7 @@ def advance_kitchen_status(session_id: str):
 
     if next_status == "served":
         name = state.get("customer_name") or "Valued Guest"
-        state["response"] = f"🍽️ Delivered! Enjoy your exquisite meal, {name}! Thank you for dining with GourmetAI Bistro."
+        state["response"] = f"🍽️ Delivered! Enjoy your exquisite meal, {name}! Thank you for dining with ZaikaAI."
 
     SESSION_STATE_CACHE[session_id] = state
     return state

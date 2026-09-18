@@ -27,7 +27,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Utensils className="w-5 h-5" />
             </div>
             <span className="font-serif text-2xl font-bold tracking-tight text-artisan-charcoal">
-              Gourmet<span className="text-artisan-terracotta">AI</span>
+              Zaika<span className="text-artisan-terracotta">AI</span>
             </span>
           </div>
 

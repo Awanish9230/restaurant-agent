@@ -30,7 +30,7 @@ export default function Home() {
     messages: [
       {
         role: "assistant",
-        content: "👋 Welcome to GourmetAI Bistro! I am your AI concierge. You can order dishes, ask about dietary ingredients, modify items, or inquire about chef specials. How can I serve you today?",
+        content: "👋 Namaste & Welcome to ZaikaAI! I am your AI dining concierge. You can order dishes, ask about dietary ingredients, modify items, or explore chef specials. How can I serve you today?",
       },
     ],
     cart: [],
@@ -51,8 +51,8 @@ export default function Home() {
     response: "",
     suggested_prompts: [
       "Show me what's on the menu",
-      "I'd like 1 Margherita Pizza & 1 Coke",
-      "Any gluten-free or vegan options?",
+      "I'd like 1 Smoky BBQ Paneer Pizza & 1 Masala Chai",
+      "Any pure vegetarian or vegan options?",
       "What are your top chef specials?",
     ],
   });

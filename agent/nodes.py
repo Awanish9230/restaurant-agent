@@ -44,7 +44,7 @@ def supervisor_router_node(state: RestaurantState) -> Dict[str, Any]:
     user_msg = state["user_message"]
     trace = _log_trace(state, "Supervisor Router", "Intent Classification", f"Analyzing customer message: '{user_msg}'")
 
-    prompt = f"""You are the Master Concierge for 'GourmetAI Bistro'.
+    prompt = f"""You are the Master Concierge for 'ZaikaAI'.
 Analyze the customer's message and determine the primary intent.
 
 Customer message: "{user_msg}"
@@ -106,7 +106,7 @@ def rag_menu_node(state: RestaurantState) -> Dict[str, Any]:
         for h in hits
     ])
 
-    prompt = f"""You are the friendly, knowledgeable Maitre D' of 'GourmetAI Bistro'.
+    prompt = f"""You are the friendly, knowledgeable AI Concierge of 'ZaikaAI'.
 Answer the customer's query accurately and comprehensively using ONLY the verified menu context below.
 
 Customer Query: "{user_msg}"
@@ -389,7 +389,7 @@ def serving_node(state: RestaurantState) -> Dict[str, Any]:
     return {
         "agent_trace": trace,
         "order_status": "served",
-        "response": f"🍽️ Delivered! Enjoy your meal, {name}! Total paid: Rs.{total}. Thank you for dining with GourmetAI Bistro."
+        "response": f"🍽️ Delivered! Enjoy your meal, {name}! Total paid: Rs.{total}. Thank you for dining with ZaikaAI."
     }
 
 
@@ -399,12 +399,12 @@ def general_chat_node(state: RestaurantState) -> Dict[str, Any]:
     name = state.get("customer_name")
     trace = _log_trace(state, "Concierge Chat", "Customer Engagement", "Crafting warm hospitality response.")
 
-    prompt = f"""You are the warm, charming AI concierge of 'GourmetAI Bistro'.
+    prompt = f"""You are the warm, charming AI concierge of 'ZaikaAI'.
 Respond courteously and concisely to the customer's message: "{user_msg}"
 Customer Name: {name or 'Valued Guest'}
 Active Cart Items: {len(state.get('cart', []))}
 
-Invite them to explore our wood-fired pizzas, gourmet smash burgers, artisanal pastas, and desserts!
+Invite them to explore our menu of pizzas, spiced burgers, artisanal pastas, refreshing drinks, and desserts!
 Do NOT use asterisks (**) or markdown bold marks. Keep output clean and natural.
 """
     raw_response = llm.invoke([HumanMessage(content=prompt)]).content
