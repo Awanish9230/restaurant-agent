@@ -134,13 +134,21 @@ class MenuRAG:
             points=points
         )
 
-    def fuzzy_match_dish(self, query: str, threshold: int = 50) -> Optional[Dict[str, Any]]:
-        """Match typos and colloquial dish names (e.g. 'pzza' -> 'Artisan Margherita Pizza')."""
+    def fuzzy_match_dish(self, query: str, threshold: int = 72) -> Optional[Dict[str, Any]]:
+        """Match typos, partial names, and colloquial dish names (e.g. 'smooky pizza' -> 'Smoky BBQ Paneer Pizza', 'pzza' -> 'Artisan Margherita Pizza') accurately."""
         query_clean = query.lower().strip()
-        
-        # Check exact match
+        if not query_clean:
+            return None
+
+        # 1. Exact match by slug
         if query_clean in self.menu_data:
             return {"slug": query_clean, **self.menu_data[query_clean], "match_score": 100}
+
+        # 2. Exact match in aliases
+        for slug, item in self.menu_data.items():
+            aliases = [a.lower() for a in item.get("aliases", [])]
+            if query_clean in aliases:
+                return {"slug": slug, **item, "match_score": 100}
 
         best_score = 0
         best_dish = None
@@ -148,35 +156,64 @@ class MenuRAG:
         for slug, item in self.menu_data.items():
             name = item["name"].lower()
             aliases = [a.lower() for a in item.get("aliases", [])]
-            tokens = slug.split() + name.split()
-            for a in aliases:
-                tokens.extend(a.split())
-            
-            # Check full string similarity
-            scores = [
+
+            # Full string & weighted token matching
+            candidate_scores = [
                 fuzz.WRatio(query_clean, slug),
                 fuzz.WRatio(query_clean, name),
-                fuzz.partial_ratio(query_clean, slug),
-                fuzz.partial_ratio(query_clean, name)
+                fuzz.ratio(query_clean, slug),
+                fuzz.ratio(query_clean, name),
+                fuzz.token_sort_ratio(query_clean, name),
+                fuzz.token_set_ratio(query_clean, name),
             ]
+
+            # Alias matching
             for a in aliases:
-                scores.append(fuzz.WRatio(query_clean, a))
-                scores.append(fuzz.ratio(query_clean, a))
+                candidate_scores.append(fuzz.WRatio(query_clean, a))
+                candidate_scores.append(fuzz.ratio(query_clean, a))
+                candidate_scores.append(fuzz.token_sort_ratio(query_clean, a))
 
-            # Also check against individual word tokens (e.g. 'pzza' against 'pizza')
-            for token in tokens:
-                scores.append(fuzz.ratio(query_clean, token))
-                scores.append(fuzz.WRatio(query_clean, token))
-
-            max_dish_score = max(scores)
-            if max_dish_score > best_score:
-                best_score = max_dish_score
+            dish_max = max(candidate_scores)
+            if dish_max > best_score:
+                best_score = dish_max
                 best_dish = {"slug": slug, **item, "match_score": best_score}
 
         if best_score >= threshold and best_dish:
             return best_dish
 
         return None
+
+    def get_category_matches(self, query: str) -> List[Dict[str, Any]]:
+        """Finds all dish items belonging to a pure generic category noun (e.g. 'pizza', 'burger', 'pasta', 'drink', 'dessert')."""
+        q = query.lower().strip()
+        all_items = self.get_all_menu()
+
+        # Pure generic keywords only
+        generic_categories = {
+            "pizza": ["pizza", "pizzas", "pzza"],
+            "burger": ["burger", "burgers"],
+            "pasta": ["pasta", "pastas"],
+            "drink": ["drink", "drinks", "beverage", "beverages", "coffee", "cold drink", "cold drinks"],
+            "dessert": ["dessert", "desserts", "ice cream", "icecream"]
+        }
+
+        for cat_name, keywords in generic_categories.items():
+            if q in keywords or any(kw == q for kw in keywords):
+                matches = []
+                for item in all_items:
+                    searchable = (item["name"] + " " + item["slug"] + " " + item.get("category", "") + " " + " ".join(item.get("aliases", []))).lower()
+                    if cat_name == "drink" and item.get("category") == "drinks":
+                        if item not in matches:
+                            matches.append(item)
+                    elif cat_name == "dessert" and item.get("category") == "desserts":
+                        if item not in matches:
+                            matches.append(item)
+                    elif any(kw in searchable for kw in keywords):
+                        if item not in matches:
+                            matches.append(item)
+                if len(matches) > 1:
+                    return matches
+        return []
 
     def search(
         self,

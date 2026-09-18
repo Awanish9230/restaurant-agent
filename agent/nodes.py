@@ -142,12 +142,43 @@ CRITICAL Guidelines:
 
 
 def order_processing_node(state: RestaurantState) -> Dict[str, Any]:
-    """Extracts dish items, handles typo resolution via RapidFuzz, and mutates cart state."""
+    """Extracts dish items, handles typo resolution via RapidFuzz, validates menu availability, and mutates cart state."""
     user_msg = state["user_message"]
+    user_msg_lower = user_msg.lower().strip()
     current_cart = list(state.get("cart", []))
     trace = _log_trace(state, "Order Processing Node", "Structured Entity Extraction", f"Extracting dish items from: '{user_msg}'")
 
-    all_dishes = [item["name"] for item in rag_engine.get_all_menu()]
+    all_menu_items = rag_engine.get_all_menu()
+    all_dishes = [item["name"] for item in all_menu_items]
+
+    # Handle bulk 'order all' requests
+    if any(phrase in user_msg_lower for phrase in ["all item", "all items", "one of each", "every item", "order everything", "order all"]):
+        current_cart = []
+        for item in all_menu_items:
+            current_cart.append({
+                "slug": item["slug"],
+                "name": item["name"],
+                "price": item["price"],
+                "quantity": 1,
+                "notes": ""
+            })
+        subtotal, tax, total = _recalculate_cart_totals(current_cart)
+        cart_summary = ", ".join([f"1x {i['name']}" for i in current_cart])
+        full_response = f"All set! I've added one of each delicious dish from our menu to your order.\n\nCurrent Cart: {cart_summary}\nTotal: Rs.{total}"
+        return {
+            "agent_trace": trace,
+            "cart": current_cart,
+            "subtotal": subtotal,
+            "tax": tax,
+            "total": total,
+            "response": _clean_text(full_response),
+            "order_status": "draft",
+            "suggested_prompts": [
+                "Confirm and place order",
+                "Add a cold beverage",
+                "Clear my cart"
+            ]
+        }
 
     prompt = f"""You are an order extraction engine for a restaurant.
 Extract all order actions from the customer message.
@@ -165,8 +196,7 @@ Return ONLY JSON in this format:
             "quantity": 1,
             "notes": "special instructions like no onions or null"
         }}
-    ],
-    "assistant_reply": "Short, cheerful confirmation of what was added or updated"
+    ]
 }}
 """
     try:
@@ -174,21 +204,42 @@ Return ONLY JSON in this format:
         res_clean = res.replace("```json", "").replace("```", "").strip()
         data = json.loads(res_clean)
         actions = data.get("actions", [])
-        assistant_reply = data.get("assistant_reply", "I've updated your order!")
         if data.get("customer_name") and not state.get("customer_name"):
             state["customer_name"] = data["customer_name"]
     except Exception:
         actions = []
-        assistant_reply = "I've reviewed your request."
 
-    # Process actions with Fuzzy matching
+    added_items = []
+    removed_items = []
+    unavailable_items = []
+    category_clarifications = []
+    suggested_prompts_dynamic = []
+
+    # Process actions with strict Fuzzy matching, disambiguation, & availability check
     for act in actions:
-        item_raw = act.get("item_name", "")
+        item_raw = act.get("item_name", "").strip()
         qty = act.get("quantity", 1)
         notes = act.get("notes") or ""
 
-        matched = rag_engine.fuzzy_match_dish(item_raw)
+        if not item_raw:
+            continue
+
+        # 1. Check if user mentioned a generic category (e.g. "pizza", "burger", "pasta", "dessert", "drink") with multiple options
+        category_matches = rag_engine.get_category_matches(item_raw)
+        if category_matches and len(category_matches) > 1:
+            category_clarifications.append({
+                "query": item_raw,
+                "matches": category_matches
+            })
+            for m in category_matches[:4]:
+                prompt_text = f"Add 1 {m['name']}"
+                if prompt_text not in suggested_prompts_dynamic:
+                    suggested_prompts_dynamic.append(prompt_text)
+            continue
+
+        matched = rag_engine.fuzzy_match_dish(item_raw, threshold=75)
         if not matched:
+            unavailable_items.append(item_raw)
             continue
 
         slug = matched["slug"]
@@ -197,12 +248,14 @@ Return ONLY JSON in this format:
 
         if act.get("action") == "remove":
             current_cart = [i for i in current_cart if i["slug"] != slug]
+            removed_items.append(name)
         elif act.get("action") == "update":
             for i in current_cart:
                 if i["slug"] == slug:
                     i["quantity"] = qty
                     if notes:
                         i["notes"] = notes
+            added_items.append(f"{qty}x {name}")
         else:  # add
             existing = next((i for i in current_cart if i["slug"] == slug), None)
             if existing:
@@ -217,11 +270,56 @@ Return ONLY JSON in this format:
                     "quantity": qty,
                     "notes": notes
                 })
+            added_items.append(f"{qty}x {name}")
+
+    # If no specific actions were matched, check if the user message itself asks for a generic category
+    if not added_items and not removed_items and not unavailable_items and not category_clarifications:
+        for cat_key in ["pizza", "burger", "pasta", "drink", "beverage", "coffee", "dessert"]:
+            matches = rag_engine.get_category_matches(cat_key)
+            if matches and (cat_key in user_msg_lower or f"{cat_key}s" in user_msg_lower):
+                category_clarifications.append({
+                    "query": cat_key,
+                    "matches": matches
+                })
+                for m in matches[:4]:
+                    prompt_text = f"Add 1 {m['name']}"
+                    if prompt_text not in suggested_prompts_dynamic:
+                        suggested_prompts_dynamic.append(prompt_text)
+                break
 
     subtotal, tax, total = _recalculate_cart_totals(current_cart)
-
     cart_summary = ", ".join([f"{i['quantity']}x {i['name']}" for i in current_cart])
-    full_response = f"{assistant_reply}\n\nCurrent Cart: {cart_summary if cart_summary else 'Empty'}\nTotal: Rs.{total}"
+
+    # Craft accurate assistant response
+    reply_parts = []
+    if category_clarifications:
+        for c in category_clarifications:
+            options_list = "\n".join([f"- {m['name']} (Rs.{m['price']})" for m in c["matches"]])
+            reply_parts.append(f"We have {len(c['matches'])} delicious {c['query']} varieties available:\n{options_list}\n\nWhich one would you like me to add for you?")
+    if added_items:
+        reply_parts.append(f"Added {', '.join(added_items)} to your order.")
+    if removed_items:
+        reply_parts.append(f"Removed {', '.join(removed_items)} from your cart.")
+    if unavailable_items:
+        unavail_str = ", ".join(unavailable_items)
+        reply_parts.append(f"I'm sorry, we don't currently carry '{unavail_str}' on our menu.")
+        # Offer close drink or dish alternatives
+        if any(w in unavail_str.lower() for w in ["sprite", "soda", "pepsi", "fanta", "juice", "beverage", "drink"]):
+            reply_parts.append("For refreshing drinks, we offer Heritage Cane Sugar Cola (Rs. 60), Wild Berry Sparkling Lemonade (Rs. 90), Kyoto Matcha Latte (Rs. 150), and Artisan Cold Brew Latte (Rs. 140)!")
+        else:
+            reply_parts.append("Feel free to explore our menu for wood-fired pizzas, smash burgers, and pastas!")
+
+    if not reply_parts:
+        reply_parts.append("I've reviewed your request.")
+
+    full_response = f"{' '.join(reply_parts)}\n\nCurrent Cart: {cart_summary if cart_summary else 'Empty'}\nTotal: Rs.{total}"
+
+    default_prompts = [
+        "Confirm and place order",
+        "Add a cold beverage",
+        "What desserts do you have?",
+        "Clear my cart"
+    ]
 
     return {
         "agent_trace": trace,
@@ -229,14 +327,9 @@ Return ONLY JSON in this format:
         "subtotal": subtotal,
         "tax": tax,
         "total": total,
-        "response": full_response,
+        "response": _clean_text(full_response),
         "order_status": "draft" if current_cart else "browsing",
-        "suggested_prompts": [
-            "Confirm and place order",
-            "Add a cold beverage",
-            "What desserts do you have?",
-            "Clear my cart"
-        ]
+        "suggested_prompts": suggested_prompts_dynamic if suggested_prompts_dynamic else default_prompts
     }
 
 
